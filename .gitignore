@@ -1,0 +1,18 @@
+# Zig build artifacts
+.zig-cache/
+zig-cache/
+zig-out/
+
+# Build outputs
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+
+# Debug symbols
+*.dSYM/
