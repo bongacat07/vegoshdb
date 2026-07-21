@@ -6,10 +6,22 @@ pub const SYS = struct {
     pub const read = 0;
     pub const write = 1;
     pub const close = 3;
+
     pub const socket = 41;
+    pub const connect = 42;
     pub const accept = 43;
+    pub const sendto = 44;
+    pub const recvfrom = 45;
+    pub const sendmsg = 46;
+    pub const recvmsg = 47;
+    pub const shutdown = 48;
     pub const bind = 49;
     pub const listen = 50;
+    pub const getsockname = 51;
+    pub const getpeername = 52;
+    pub const socketpair = 53;
+    pub const setsockopt = 54;
+    pub const getsockopt = 55;
 };
 
 pub fn socket(
@@ -160,4 +172,24 @@ pub fn write(fd: types.Fd, buf: []const u8) !usize {
     }
 
     return @intCast(ret);
+}
+
+pub fn setsockopt(fd: types.Fd, level: i32, optname: i32, optval: []const u8) !void {
+    const ret = linux_syscall.syscall5(
+        SYS.setsockopt,
+        @as(usize, @intCast(fd.fd)),
+        @as(usize, @intCast(level)),
+        @as(usize, @intCast(optname)),
+        @intFromPtr(optval.ptr),
+        optval.len,
+    );
+    if (ret < 0) {
+        return switch (errno.fromRet(ret)) {
+            .BADF => error.InvalidFD,
+            .NOTSOCK => error.NotASocketFD,
+            .NOPROTOOPT => error.OptionNotSupported,
+            .FAULT => error.BadBuffer,
+            else => error.Unexpected,
+        };
+    }
 }
