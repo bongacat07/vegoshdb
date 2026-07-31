@@ -32,6 +32,7 @@ const Slot = extern struct {
 comptime {
     std.debug.assert(@sizeOf(Slot) == 64);
 }
+
 pub const Vegosh = extern struct {
     slots: [TABLE_SIZE]Slot align(64),
     count: u32,
@@ -45,18 +46,15 @@ pub const Error = error{
 };
 
 inline fn hashKey(key: *const [KEY_SIZE]u8) u64 {
-    // Placeholder — swap for a real rapidhash port if you need hash parity
-    // with the C++/Rust versions.
     return std.hash.Wyhash.hash(123, key);
 }
 
-/// Resets the table to empty. Call once at startup before insert/get/delete.
 pub fn init(table: *Vegosh) void {
     table.count = 0;
     @memset(&table.slots, Slot.empty);
 }
 
-pub fn insert(table: *Vegosh, key: *const [KEY_SIZE]u8, value: *const [VALUE_SIZE]u8, value_len: u8) Error!InsertOutcome {
+pub inline fn insert(table: *Vegosh, key: *const [KEY_SIZE]u8, value: *const [VALUE_SIZE]u8, value_len: u8) Error!InsertOutcome {
     std.debug.assert(value_len <= VALUE_SIZE);
 
     if (table.count >= MAX_KEYS) return error.TableFull;
@@ -97,7 +95,7 @@ pub fn insert(table: *Vegosh, key: *const [KEY_SIZE]u8, value: *const [VALUE_SIZ
     }
 }
 
-pub fn get(table: *const Vegosh, key: *const [KEY_SIZE]u8) Error!struct { value: [VALUE_SIZE]u8, len: u8 } {
+pub inline fn get(table: *const Vegosh, key: *const [KEY_SIZE]u8) Error!struct { value: [VALUE_SIZE]u8, len: u8 } {
     const hash = hashKey(key);
     var index: u32 = @truncate(hash & MASK);
     var probe_dist: u16 = 0;
@@ -118,7 +116,7 @@ pub fn get(table: *const Vegosh, key: *const [KEY_SIZE]u8) Error!struct { value:
     }
 }
 
-pub fn delete(table: *Vegosh, key: *const [KEY_SIZE]u8) Error!void {
+pub inline fn delete(table: *Vegosh, key: *const [KEY_SIZE]u8) Error!void {
     const hash = hashKey(key);
     var index: u32 = @truncate(hash & MASK);
     var probe_dist: u16 = 0;
@@ -128,7 +126,7 @@ pub fn delete(table: *Vegosh, key: *const [KEY_SIZE]u8) Error!void {
 
         if (slot.status == EMPTY) return error.NotFound;
         if (slot.hash == hash and std.mem.eql(u8, &slot.key, key)) break;
-        if (slot.probe_dist < probe_dist) return error.NotFound;
+        if (probe_dist > slot.probe_dist) return error.NotFound;
 
         index = (index + 1) & MASK;
         probe_dist += 1;
@@ -151,11 +149,11 @@ pub fn delete(table: *Vegosh, key: *const [KEY_SIZE]u8) Error!void {
     table.count -= 1;
 }
 
-pub fn size(table: *const Vegosh) u32 {
+pub inline fn size(table: *const Vegosh) u32 {
     return table.count;
 }
 
-pub fn clear(table: *Vegosh) void {
+pub inline fn clear(table: *Vegosh) void {
     @memset(&table.slots, Slot.empty);
     table.count = 0;
 }
