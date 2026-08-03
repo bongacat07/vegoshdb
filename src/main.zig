@@ -2,40 +2,33 @@ const std = @import("std");
 const Io = std.Io;
 const syscall = @import("rawz/syscall.zig");
 const types = @import("rawz/types.zig");
+const server = @import("server/blocking.zig");
+const clap = @import("clap");
 
-pub fn main() !void {
-    var read_buf: [1024]u8 = undefined;
-    const listener = try syscall.socket(.inet, .stream, .tcp);
-    const addr_in = types.SockAddrIn{
-        .port = types.htons(9000),
-        .addr = 0,
+pub fn main(init: std.process.Init) !void {
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help                Display this help and exit.
+        \\-l, --load-factor <f64>   An option parameter, which takes a value.
+        \\-p, --listen <str>        An option parameter, which takes a string.
+        \\
+    );
+
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, init.minimal.args, .{
+        .diagnostic = &diag,
+        .allocator = init.gpa,
+    }) catch |err| {
+        try diag.reportToFile(init.io, .stderr(), err);
+        return err;
     };
-    const addr: types.SockAddr = @bitCast(addr_in);
+    defer res.deinit();
 
-    try syscall.bind(listener, &addr, @sizeOf(types.SockAddr));
-    try syscall.listen(listener, 128);
+    if (res.args.help != 0)
+        std.debug.print("--help\n", .{});
+    if (res.args.@"load-factor") |lf|
+        std.debug.print("--load-factor = {d}\n", .{lf});
+    if (res.args.listen) |addr|
+        std.debug.print("--listen = {s}\n", .{addr});
 
-    std.debug.print("echo server listening on :9000\n", .{});
-
-    while (true) {
-        const client = syscall.accept(listener, null, null) catch |err| {
-            std.debug.print("accept error: {s}\n", .{@errorName(err)});
-            continue;
-        };
-
-        std.debug.print("Accepted client fd: {}\n", .{client});
-
-        while (true) {
-            const n = syscall.read(client, &read_buf) catch |err| {
-                std.debug.print("read error: {s}\n", .{@errorName(err)});
-                break;
-            };
-            if (n == 0) break;
-
-            _ = syscall.write(client, read_buf[0..n]) catch |err| {
-                std.debug.print("write error: {s}\n", .{@errorName(err)});
-                break;
-            };
-        }
-    }
+    try server.startServer();
 }
