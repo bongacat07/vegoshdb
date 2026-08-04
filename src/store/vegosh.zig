@@ -2,7 +2,6 @@ const std = @import("std");
 
 pub const TABLE_SIZE: usize = 1 << 21;
 pub const MASK: u32 = @as(u32, TABLE_SIZE) - 1;
-pub const MAX_KEYS: u32 = 1_000_000;
 
 pub const KEY_SIZE: usize = 16;
 pub const VALUE_SIZE: usize = 32;
@@ -36,6 +35,7 @@ comptime {
 pub const Vegosh = extern struct {
     slots: [TABLE_SIZE]Slot align(64),
     count: u32,
+    max_keys: u32,
 };
 
 pub const InsertOutcome = enum { inserted, updated };
@@ -49,15 +49,16 @@ inline fn hashKey(key: *const [KEY_SIZE]u8) u64 {
     return std.hash.Wyhash.hash(123, key);
 }
 
-pub fn init(table: *Vegosh) void {
+pub fn init(table: *Vegosh, max_keys: u32) void {
     table.count = 0;
+    table.max_keys = max_keys;
     @memset(&table.slots, Slot.empty);
 }
 
 pub inline fn insert(table: *Vegosh, key: *const [KEY_SIZE]u8, value: *const [VALUE_SIZE]u8, value_len: u8) Error!InsertOutcome {
     std.debug.assert(value_len <= VALUE_SIZE);
 
-    if (table.count >= MAX_KEYS) return error.TableFull;
+    if (table.count >= table.max_keys) return error.TableFull;
 
     const hash = hashKey(key);
     var index: u32 = @truncate(hash & MASK);

@@ -25,8 +25,10 @@ pub fn main(init: std.process.Init) !void {
 
     if (res.args.help != 0)
         std.debug.print("--help\n", .{});
-    if (res.args.@"load-factor") |lf|
-        std.debug.print("--load-factor = {d}\n", .{lf});
+    if (res.args.@"load-factor") |lf| {
+        const max_occupancy: usize = @intFromFloat(lf * @as(f64, 1 << 21));
+        std.debug.print("max_occupancy = {d}\n", .{max_occupancy});
+    }
     if (res.args.listen) |addr|
         std.debug.print("--listen = {s}\n", .{addr});
 
