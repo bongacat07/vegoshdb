@@ -33,6 +33,37 @@ pub const SockAddr = extern struct {
     sa_data: [14]u8,
 };
 
+// types.zig
+pub fn parseListenAddr(addr_str: []const u8) !SockAddrIn {
+    const colon_idx = std.mem.lastIndexOfScalar(u8, addr_str, ':') orelse return error.InvalidAddr;
+    const ip_str = addr_str[0..colon_idx];
+    const port_str = addr_str[colon_idx + 1 ..];
+
+    const port = try std.fmt.parseInt(u16, port_str, 10);
+
+    var octets: [4]u8 = undefined;
+    var it = std.mem.splitScalar(u8, ip_str, '.');
+    var i: usize = 0;
+    while (it.next()) |part| {
+        if (i >= 4) return error.InvalidAddr;
+        octets[i] = try std.fmt.parseInt(u8, part, 10);
+        i += 1;
+    }
+    if (i != 4) return error.InvalidAddr;
+
+    // Pack octets into a u32 so that, in memory, byte 0 == octets[0].
+    // This matches network-byte-order layout on little-endian hosts (x86_64).
+    const addr: u32 = @as(u32, octets[0]) |
+        (@as(u32, octets[1]) << 8) |
+        (@as(u32, octets[2]) << 16) |
+        (@as(u32, octets[3]) << 24);
+
+    return SockAddrIn{
+        .port = htons(port),
+        .addr = addr,
+    };
+}
+
 pub const SocketOption = enum(c_int) {
     debug = 1,
     reuse_addr = 2,

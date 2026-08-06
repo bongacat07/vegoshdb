@@ -9,7 +9,7 @@ pub const VALUE_SIZE: usize = 32;
 const EMPTY: u8 = 0x00;
 const OCCUPIED: u8 = 0x01;
 
-const Slot = extern struct {
+const Slot = struct {
     key: [KEY_SIZE]u8,
     value: [VALUE_SIZE]u8,
     hash: u64,
@@ -32,7 +32,7 @@ comptime {
     std.debug.assert(@sizeOf(Slot) == 64);
 }
 
-pub const Vegosh = extern struct {
+pub const Vegosh = struct {
     slots: [TABLE_SIZE]Slot align(64),
     count: u32,
     max_keys: u32,
