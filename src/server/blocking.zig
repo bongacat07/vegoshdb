@@ -1,38 +1,38 @@
-// server/blocking.zig
 const syscall = @import("../rawz/syscall.zig");
 const types = @import("../rawz/types.zig");
 const std = @import("std");
-
+const client = @import("connnection.zig");
+const parser = @import("../protocol/parser.zig");
 pub fn startServer(addr_in: types.SockAddrIn) !void {
-    var read_buf: [1024]u8 = undefined;
     const listener = try syscall.socket(.inet, .stream, .tcp);
     const addr: types.SockAddr = @bitCast(addr_in);
+
     try syscall.bind(listener, &addr, @sizeOf(types.SockAddr));
     try syscall.listen(listener, 128);
-    std.debug.print("echo server listening\n", .{});
+
+    std.debug.print("server listening\n", .{});
 
     while (true) {
-        const client = syscall.accept(listener, null, null) catch |err| {
+        const client_fd = syscall.accept(listener, null, null) catch |err| {
             std.debug.print("accept error: {s}\n", .{@errorName(err)});
             continue;
         };
 
-        std.debug.print("Accepted client fd: {}\n", .{client});
+        std.debug.print("Accepted client fd: {}\n", .{client_fd});
+
+        var conn = client.Connection.init(client_fd);
 
         while (true) {
-            const n = syscall.read(client, &read_buf) catch |err| {
-                std.debug.print("read error: {s}\n", .{@errorName(err)});
-                break;
+            const result = parser.parse(&conn) catch |err| switch (err) {
+                error.ConnectionClosed => break,
+                else => {
+                    std.debug.print("parser error: {s}\n", .{@errorName(err)});
+                    break;
+                },
             };
-            if (n == 0) {
-                break;
-            }
-
-            _ = syscall.write(client, read_buf[0..n]) catch |err| {
-                std.debug.print("write error: {s}\n", .{@errorName(err)});
-                break;
-            };
+            _ = result;
         }
-        try syscall.close(client);
+
+        try syscall.close(client_fd);
     }
 }

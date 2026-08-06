@@ -1,5 +1,6 @@
 const types = @import("../rawz/types.zig");
 const syscall = @import("../rawz/syscall.zig");
+const client = @import("../server/connnection.zig");
 const std = @import("std");
 
 pub const MAX_KEY_LEN: usize = 16;
@@ -17,6 +18,7 @@ pub const SIZE: u8 = 0x04;
 pub const PING: u8 = 0x05;
 pub const FLUSH: u8 = 0x06;
 
+//Response codes
 pub const OK: u8 = 0x69;
 pub const KEY_NOT_FOUND: u8 = 0x67;
 pub const MAX_LIMIT_REACHED: u8 = 0x68;
@@ -50,101 +52,52 @@ pub const ParseResult = union(enum) {
     invalid_opcode: u8,
 };
 
-pub fn parser(fd: types.Fd) !ParseResult {
-    var header: [5]u8 = undefined;
-
-    const n = try syscall.read(fd, &header);
-
-    if (n < 5) {
-        // temporary handling for now
-        return error.IncompleteRequest;
-    }
+pub fn parse(conn: *client.Connection) !void {
+    const header = try conn.readHeader();
 
     if (!std.mem.eql(u8, header[0..4], &MAGIC_BYTES)) {
-        return .invalid_magic;
+        std.debug.print("Invalid magic\n", .{});
+        return;
     }
 
-    const opcode = header[4];
-
-    switch (opcode) {
+    switch (header[4]) {
         PING => {
-            return .{
-                .command = .ping,
-            };
+            std.debug.print("PING\n", .{});
         },
 
         GET_KEY => {
-            var key: [MAX_KEY_LEN]u8 = undefined;
-
-            const key_read = try syscall.read(fd, &key);
-
-            if (key_read != MAX_KEY_LEN) {
-                return error.IncompleteRequest;
-            }
-
-            return .{
-                .command = .{
-                    .get = .{
-                        .key = key,
-                    },
-                },
-            };
+            const key = try conn.readKey();
+            std.debug.print("GET key: '{s}'\n", .{&key});
         },
 
         SET_KEY => {
-            var key: [MAX_KEY_LEN]u8 = undefined;
-            var value: [MAX_VALUE_LEN]u8 = undefined;
+            const key = try conn.readKey();
+            const value = try conn.readValue();
 
-            const key_read = try syscall.read(fd, &key);
-            if (key_read != MAX_KEY_LEN) {
-                return error.IncompleteRequest;
-            }
-
-            const value_read = try syscall.read(fd, &value);
-            if (value_read != MAX_VALUE_LEN) {
-                return error.IncompleteRequest;
-            }
-
-            return .{
-                .command = .{
-                    .set = .{
-                        .key = key,
-                        .value = value,
-                    },
-                },
-            };
+            std.debug.print(
+                "SET key: '{s}' value: '{s}'\n",
+                .{ &key, &value },
+            );
         },
+
         DELETE_KEY => {
-            var key: [MAX_KEY_LEN]u8 = undefined;
-
-            const key_read = try syscall.read(fd, &key);
-
-            if (key_read != MAX_KEY_LEN) {
-                return error.IncompleteRequest;
-            }
-
-            return .{
-                .command = .{
-                    .delete = .{
-                        .key = key,
-                    },
-                },
-            };
+            const key = try conn.readKey();
+            std.debug.print("DELETE key: '{s}'\n", .{&key});
         },
+
         FLUSH => {
-            return .{
-                .command = .flush,
-            };
+            std.debug.print("FLUSH\n", .{});
         },
+
         SIZE => {
-            return .{
-                .command = .size,
-            };
+            std.debug.print("SIZE\n", .{});
         },
+
         else => {
-            return .{
-                .invalid_opcode = opcode,
-            };
+            std.debug.print(
+                "Invalid opcode: 0x{x}\n",
+                .{header[4]},
+            );
         },
     }
 }
