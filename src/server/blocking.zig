@@ -1,7 +1,7 @@
 const syscall = @import("../rawz/syscall.zig");
 const types = @import("../rawz/types.zig");
 const std = @import("std");
-const client = @import("connnection.zig");
+const client = @import("connection.zig");
 const parser = @import("../protocol/parser.zig");
 pub fn startServer(addr_in: types.SockAddrIn) !void {
     const listener = try syscall.socket(.inet, .stream, .tcp);

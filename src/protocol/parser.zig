@@ -1,6 +1,4 @@
-const types = @import("../rawz/types.zig");
-const syscall = @import("../rawz/syscall.zig");
-const client = @import("../server/connnection.zig");
+const client = @import("../server/connection.zig");
 const std = @import("std");
 
 pub const MAX_KEY_LEN: usize = 16;
@@ -18,7 +16,7 @@ pub const SIZE: u8 = 0x04;
 pub const PING: u8 = 0x05;
 pub const FLUSH: u8 = 0x06;
 
-//Response codes
+// Response codes
 pub const OK: u8 = 0x69;
 pub const KEY_NOT_FOUND: u8 = 0x67;
 pub const MAX_LIMIT_REACHED: u8 = 0x68;
@@ -29,6 +27,7 @@ pub const Command = union(enum) {
     set: struct {
         key: [MAX_KEY_LEN]u8,
         value: [MAX_VALUE_LEN]u8,
+        value_len: u8,
     },
 
     get: struct {
@@ -40,9 +39,7 @@ pub const Command = union(enum) {
     },
 
     size,
-
     ping,
-
     flush,
 };
 
@@ -52,52 +49,76 @@ pub const ParseResult = union(enum) {
     invalid_opcode: u8,
 };
 
-pub fn parse(conn: *client.Connection) !void {
+pub fn parse(conn: *client.Connection) !ParseResult {
     const header = try conn.readHeader();
 
     if (!std.mem.eql(u8, header[0..4], &MAGIC_BYTES)) {
-        std.debug.print("Invalid magic\n", .{});
-        return;
+        return .invalid_magic;
     }
 
     switch (header[4]) {
         PING => {
-            std.debug.print("PING\n", .{});
+            return .{
+                .command = .ping,
+            };
         },
 
         GET_KEY => {
             const key = try conn.readKey();
-            std.debug.print("GET key: '{s}'\n", .{&key});
+
+            return .{
+                .command = .{
+                    .get = .{
+                        .key = key,
+                    },
+                },
+            };
         },
 
         SET_KEY => {
             const key = try conn.readKey();
-            const value = try conn.readValue();
+            const value_len = try conn.readValueLen();
+            const value = try conn.readValue(value_len);
 
-            std.debug.print(
-                "SET key: '{s}' value: '{s}'\n",
-                .{ &key, &value },
-            );
+            return .{
+                .command = .{
+                    .set = .{
+                        .key = key,
+                        .value = value,
+                        .value_len = value_len,
+                    },
+                },
+            };
         },
 
         DELETE_KEY => {
             const key = try conn.readKey();
-            std.debug.print("DELETE key: '{s}'\n", .{&key});
+
+            return .{
+                .command = .{
+                    .delete = .{
+                        .key = key,
+                    },
+                },
+            };
         },
 
         FLUSH => {
-            std.debug.print("FLUSH\n", .{});
+            return .{
+                .command = .flush,
+            };
         },
 
         SIZE => {
-            std.debug.print("SIZE\n", .{});
+            return .{
+                .command = .size,
+            };
         },
 
         else => {
-            std.debug.print(
-                "Invalid opcode: 0x{x}\n",
-                .{header[4]},
-            );
+            return .{
+                .invalid_opcode = header[4],
+            };
         },
     }
 }
