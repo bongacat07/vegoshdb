@@ -91,7 +91,7 @@ pub const Vegosh = struct {
         }
     }
 
-    pub inline fn get(table: *const Vegosh, key: *const [KEY_SIZE]u8) LookupError!struct { value: [VALUE_SIZE]u8, len: u8 } {
+    pub inline fn get(table: *Vegosh, key: *const [KEY_SIZE]u8) LookupError!struct { value: [VALUE_SIZE]u8, len: u8 } {
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
         var probe_dist: u16 = 0;
@@ -145,7 +145,7 @@ pub const Vegosh = struct {
         table.count -= 1;
     }
 
-    pub inline fn size(table: *const Vegosh) u32 {
+    pub inline fn size(table: *Vegosh) u32 {
         return table.count;
     }
 

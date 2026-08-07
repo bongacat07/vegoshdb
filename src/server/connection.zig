@@ -50,4 +50,31 @@ pub const Connection = struct {
         try self.readExact(value[0..value_len]);
         return value;
     }
+
+    pub fn writeExact(self: *Connection, buf: []const u8) !void {
+        var off: usize = 0;
+        while (off < buf.len) {
+            const n = try syscall.write(self.fd, buf[off..]);
+            if (n == 0)
+                return error.ConnectionClosed;
+            off += n;
+        }
+    }
+
+    pub fn writeResponse(self: *Connection, code: u8) !void {
+        try self.writeExact(&[_]u8{code});
+    }
+
+    pub fn writeValue(self: *Connection, value: []const u8, value_len: u8) !void {
+        try self.writeExact(value[0..value_len]);
+    }
+
+    pub fn writeSize(self: *Connection, value: u32) !void {
+        var buf: [4]u8 = undefined;
+        std.mem.writeInt(u32, &buf, value, .little);
+        try self.writeExact(&buf);
+    }
+    pub fn writeValueLen(self: *Connection, code: u8) !void {
+        try self.writeExact(&[_]u8{code});
+    }
 };

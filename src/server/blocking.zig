@@ -45,7 +45,7 @@ pub fn startServer(
                 },
             };
 
-            handler.handleParseResult(&conn, &table, result) catch |err| {
+            handler.handleParseResult(&table, result, &conn) catch |err| {
                 std.debug.print(
                     "handler error: {s}\n",
                     .{@errorName(err)},

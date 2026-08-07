@@ -3,20 +3,24 @@ const store = @import("../store/vegosh.zig");
 const client = @import("../server/connection.zig");
 const std = @import("std");
 
+pub const OK: u8 = 0x69;
+pub const KEY_NOT_FOUND: u8 = 0x67;
+pub const MAX_LIMIT_REACHED: u8 = 0x68;
+pub const OK_KEY_UPDATED: u8 = 0x65;
+pub const INVALID_OPCODE: u8 = 0x64;
+pub const PONG: u8 = 0x63;
 pub fn handleParseResult(
     table: *store.Vegosh,
     result: parser.ParseResult,
+    conn: *client.Connection,
 ) !void {
     switch (result) {
         .invalid_magic => {
             std.debug.print("[protocol] invalid magic\n", .{});
         },
 
-        .invalid_opcode => |opcode| {
-            std.debug.print(
-                "[protocol] invalid opcode: {d}\n",
-                .{opcode},
-            );
+        .invalid_opcode => {
+            try conn.writeResponse(INVALID_OPCODE);
         },
 
         .command => |command| {
@@ -28,35 +32,18 @@ pub fn handleParseResult(
                         cmd.value_len,
                     ) catch |err| switch (err) {
                         error.TableFull => {
-                            std.debug.print(
-                                "[set] table full\n",
-                                .{},
-                            );
+                            try conn.writeResponse(MAX_LIMIT_REACHED);
                             return;
                         },
                     };
 
                     switch (outcome) {
                         .inserted => {
-                            std.debug.print(
-                                "[set] inserted key={s} len={d} size={d}\n",
-                                .{
-                                    &cmd.key,
-                                    cmd.value_len,
-                                    store.Vegosh.size(table),
-                                },
-                            );
+                            try conn.writeResponse(OK);
                         },
 
                         .updated => {
-                            std.debug.print(
-                                "[set] updated key={s} len={d} size={d}\n",
-                                .{
-                                    &cmd.key,
-                                    cmd.value_len,
-                                    store.Vegosh.size(table),
-                                },
-                            );
+                            try conn.writeResponse(OK_KEY_UPDATED);
                         },
                     }
                 },
@@ -66,22 +53,14 @@ pub fn handleParseResult(
                         &cmd.key,
                     ) catch |err| switch (err) {
                         error.NotFound => {
-                            std.debug.print(
-                                "[get] not found key={s}\n",
-                                .{&cmd.key},
-                            );
+                            try conn.writeResponse(KEY_NOT_FOUND);
                             return;
                         },
                     };
 
-                    std.debug.print(
-                        "[get] key={s} len={d} value={s}\n",
-                        .{
-                            &cmd.key,
-                            result_value.len,
-                            result_value.value[0..result_value.len],
-                        },
-                    );
+                    try conn.writeResponse(OK);
+                    try conn.writeValueLen(result_value.len);
+                    try conn.writeValue(&result_value.value, result_value.len);
                 },
 
                 .delete => |cmd| {
@@ -89,41 +68,26 @@ pub fn handleParseResult(
                         &cmd.key,
                     ) catch |err| switch (err) {
                         error.NotFound => {
-                            std.debug.print(
-                                "[delete] not found key={s}\n",
-                                .{&cmd.key},
-                            );
+                            try conn.writeResponse(KEY_NOT_FOUND);
                             return;
                         },
                     };
 
-                    std.debug.print(
-                        "[delete] deleted key={s} size={d}\n",
-                        .{
-                            &cmd.key,
-                            store.Vegosh.size(table),
-                        },
-                    );
+                    try conn.writeResponse(OK);
                 },
 
                 .flush => {
                     table.clear();
-
-                    std.debug.print(
-                        "[flush] table cleared size={d}\n",
-                        .{store.Vegosh.size(table)},
-                    );
+                    try conn.writeResponse(OK);
                 },
 
                 .size => {
-                    std.debug.print(
-                        "[size] {d}\n",
-                        .{table.size()},
-                    );
+                    try conn.writeResponse(OK);
+                    try conn.writeSize(table.size());
                 },
 
                 .ping => {
-                    std.debug.print("[ping] pong\n", .{});
+                    try conn.writeResponse(PONG);
                 },
             }
         },
