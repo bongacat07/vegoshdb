@@ -32,5 +32,5 @@ pub fn main(init: std.process.Init) !void {
 
     const listen_str: []const u8 = res.args.listen orelse "0.0.0.0:9000";
     const addr_in = try types.parseListenAddr(listen_str);
-    try blocking_server.startServer(addr_in);
+    try blocking_server.startServer(addr_in, max_occupancy);
 }

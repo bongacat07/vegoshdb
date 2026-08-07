@@ -3,8 +3,19 @@ const types = @import("../rawz/types.zig");
 const std = @import("std");
 const client = @import("connection.zig");
 const parser = @import("../protocol/parser.zig");
-pub fn startServer(addr_in: types.SockAddrIn) !void {
+const handler = @import("../protocol/handler.zig");
+const store = @import("../store/vegosh.zig");
+
+var table: store.Vegosh align(64) = undefined;
+
+pub fn startServer(
+    addr_in: types.SockAddrIn,
+    max_occupancy: u32,
+) !void {
+    store.Vegosh.init(&table, max_occupancy);
+
     const listener = try syscall.socket(.inet, .stream, .tcp);
+
     const addr: types.SockAddr = @bitCast(addr_in);
 
     try syscall.bind(listener, &addr, @sizeOf(types.SockAddr));
@@ -26,13 +37,28 @@ pub fn startServer(addr_in: types.SockAddrIn) !void {
             const result = parser.parse(&conn) catch |err| switch (err) {
                 error.ConnectionClosed => break,
                 else => {
-                    std.debug.print("parser error: {s}\n", .{@errorName(err)});
+                    std.debug.print(
+                        "parser error: {s}\n",
+                        .{@errorName(err)},
+                    );
                     break;
                 },
             };
-            _ = result;
+
+            handler.handleParseResult(&conn, &table, result) catch |err| {
+                std.debug.print(
+                    "handler error: {s}\n",
+                    .{@errorName(err)},
+                );
+                break;
+            };
         }
 
-        try syscall.close(client_fd);
+        syscall.close(client_fd) catch |err| {
+            std.debug.print(
+                "close error: {s}\n",
+                .{@errorName(err)},
+            );
+        };
     }
 }
