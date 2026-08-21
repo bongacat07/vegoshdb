@@ -85,6 +85,11 @@ pub fn build(b: *std.Build) void {
     const clap = b.dependency("clap", .{});
     exe.root_module.addImport("clap", clap.module("clap"));
 
+    const rawz_dep = b.dependency("rawz", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("rawz", rawz_dep.module("rawz"));
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden

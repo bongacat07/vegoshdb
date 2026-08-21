@@ -1,5 +1,6 @@
-const types = @import("../rawz/types.zig");
-const syscall = @import("../rawz/syscall.zig");
+const rawz = @import("rawz");
+const types = rawz.types;
+const io = rawz.io;
 const std = @import("std");
 
 pub const MAX_KEY_LEN: usize = 16;
@@ -17,7 +18,7 @@ pub const Connection = struct {
     pub fn readExact(self: *Connection, buf: []u8) !void {
         var off: usize = 0;
         while (off < buf.len) {
-            const n = try syscall.read(self.fd, buf[off..]);
+            const n = try io.read(self.fd, buf[off..]);
             if (n == 0)
                 return error.ConnectionClosed;
             off += n;
@@ -54,7 +55,7 @@ pub const Connection = struct {
     pub fn writeExact(self: *Connection, buf: []const u8) !void {
         var off: usize = 0;
         while (off < buf.len) {
-            const n = try syscall.write(self.fd, buf[off..]);
+            const n = try io.write(self.fd, buf[off..]);
             if (n == 0)
                 return error.ConnectionClosed;
             off += n;

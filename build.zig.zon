@@ -36,6 +36,10 @@
             .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.12.0.tar.gz",
             .hash = "clap-0.12.0-oBajB7foAQDqlSwaSG5g0yq7xGbQARUsBk5T64gAOqP5",
         },
+        .rawz = .{
+            .url = "git+https://github.com/bongacat07/rawz.git?ref=main#8a2d95d3fd829fd32cf5a594c75f84ae1e4061e1",
+            .hash = "rawz-0.0.0-UqYV1pF4AADGkKw0hDLP9ZN-xckkwCd2-1LkqMZNoVJ9",
+        },
     },
     .paths = .{
         "build.zig",

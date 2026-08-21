@@ -1,11 +1,13 @@
-const syscall = @import("../rawz/syscall.zig");
-const types = @import("../rawz/types.zig");
+const syscall = rawz.socket;
+const types = rawz.types;
+const io = rawz.io;
 const std = @import("std");
 const client = @import("connection.zig");
 const parser = @import("../protocol/parser.zig");
 const handler = @import("../protocol/handler.zig");
 const store = @import("../store/vegosh.zig");
 
+const rawz = @import("rawz");
 var table: store.Vegosh align(64) = undefined;
 
 pub fn startServer(
@@ -16,7 +18,7 @@ pub fn startServer(
 
     const listener = try syscall.socket(.inet, .stream, .tcp);
 
-    const addr: types.SockAddr = @bitCast(addr_in);
+    var addr: types.SockAddr = @bitCast(addr_in);
 
     try syscall.bind(listener, &addr, @sizeOf(types.SockAddr));
     try syscall.listen(listener, 128);
@@ -54,7 +56,7 @@ pub fn startServer(
             };
         }
 
-        syscall.close(client_fd) catch |err| {
+        io.close(client_fd) catch |err| {
             std.debug.print(
                 "close error: {s}\n",
                 .{@errorName(err)},
