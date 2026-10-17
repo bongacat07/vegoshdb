@@ -5,16 +5,35 @@ const clap = @import("clap");
 const rawz = @import("rawz");
 const types = rawz.types;
 
-const default_load_factor: f64 = 0.75;
+const default_load_factor: f64 = vegosh.MAX_LOAD_FACTOR;
 const default_listen = "0.0.0.0:9000";
 
+const LoadFactorError = error{
+    NotFinite,
+    TooLarge,
+    NotPositive,
+    OccupancyTooSmall,
+};
+fn validateLoadFactor(load_factor: f64) LoadFactorError!u32 {
+    //This function takes a load factor and validates it and returns the MAX keys
+    if (!std.math.isFinite(load_factor)) return LoadFactorError.NotFinite;
+    if (load_factor <= 0) return LoadFactorError.NotPositive;
+    if (load_factor > vegosh.MAX_LOAD_FACTOR) return LoadFactorError.TooLarge;
+    const max_occupancy: u32 = @intFromFloat(
+        load_factor * @as(f64, @floatFromInt(vegosh.TABLE_SIZE)),
+    );
+
+    if (max_occupancy == 0) return LoadFactorError.OccupancyTooSmall;
+
+    return max_occupancy;
+}
 const help_param =
     "-h, --help                Print this help and exit.\n";
 
 const load_factor_param = std.fmt.comptimePrint(
     "-l, --load-factor <f64>   Fraction of the table that may be occupied before " ++
-        "the store refuses inserts. Must satisfy 0 < value < 1 (default: {d}).\n",
-    .{default_load_factor},
+        "the store refuses inserts. Must satisfy 0 < value <= {d} (default: {d}).\n",
+    .{ vegosh.MAX_LOAD_FACTOR, default_load_factor },
 );
 
 const listen_param = std.fmt.comptimePrint(
@@ -79,9 +98,15 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const load_factor = res.args.@"load-factor" orelse default_load_factor;
-    const max_occupancy: u32 = @intFromFloat(
-        load_factor * @as(f64, @floatFromInt(vegosh.TABLE_SIZE)),
-    );
+    const max_occupancy: u32 = validateLoadFactor(load_factor) catch |err| {
+        switch (err) {
+            LoadFactorError.NotFinite => std.debug.print("--load-factor must be a finite number\n", .{}),
+            LoadFactorError.NotPositive => std.debug.print("--load-factor must be greater than 0\n", .{}),
+            LoadFactorError.TooLarge => std.debug.print("--load-factor must be at most {d}\n", .{vegosh.MAX_LOAD_FACTOR}),
+            LoadFactorError.OccupancyTooSmall => std.debug.print("--load-factor {d} is too small: it allows zero occupied slots\n", .{load_factor}),
+        }
+        return err;
+    };
     std.debug.print("max_occupancy = {d}\n", .{max_occupancy});
 
     const listen_str: []const u8 = res.args.listen orelse default_listen;

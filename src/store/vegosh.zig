@@ -5,7 +5,7 @@ pub const MASK: u32 = @as(u32, TABLE_SIZE) - 1;
 
 pub const KEY_SIZE: usize = 16;
 pub const VALUE_SIZE: usize = 32;
-
+pub const MAX_LOAD_FACTOR: f64 = 0.75;
 const EMPTY: u8 = 0x00;
 const OCCUPIED: u8 = 0x01;
 
