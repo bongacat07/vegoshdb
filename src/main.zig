@@ -14,11 +14,14 @@ const LoadFactorError = error{
     NotPositive,
     OccupancyTooSmall,
 };
+
+/// Validates a load factor and returns the maximum number of occupied slots.
 fn validateLoadFactor(load_factor: f64) LoadFactorError!u32 {
-    //This function takes a load factor and validates it and returns the MAX keys
     if (!std.math.isFinite(load_factor)) return LoadFactorError.NotFinite;
     if (load_factor <= 0) return LoadFactorError.NotPositive;
     if (load_factor > vegosh.MAX_LOAD_FACTOR) return LoadFactorError.TooLarge;
+
+    // Safe: 0 < load_factor <= MAX_LOAD_FACTOR, so the result fits in a u32.
     const max_occupancy: u32 = @intFromFloat(
         load_factor * @as(f64, @floatFromInt(vegosh.TABLE_SIZE)),
     );
@@ -27,6 +30,7 @@ fn validateLoadFactor(load_factor: f64) LoadFactorError!u32 {
 
     return max_occupancy;
 }
+
 const help_param =
     "-h, --help                Print this help and exit.\n";
 
@@ -53,22 +57,30 @@ const usage_text = std.fmt.comptimePrint(
     .{ default_listen, default_load_factor },
 );
 
-pub fn parseListenAddr(addr_str: []const u8) !types.SockAddrIn {
+const ListenAddrError = error{
+    InvalidFormat,
+    InvalidIP,
+    InvalidPort,
+};
+
+pub fn parseListenAddr(addr_str: []const u8) ListenAddrError!types.SockAddrIn {
     const colon_idx = std.mem.lastIndexOfScalar(u8, addr_str, ':') orelse
-        return error.InvalidAddr;
+        return ListenAddrError.InvalidFormat;
     const ip_str = addr_str[0..colon_idx];
     const port_str = addr_str[colon_idx + 1 ..];
-
-    const port = try std.fmt.parseInt(u16, port_str, 10);
 
     var octets: [4]u8 = undefined;
     var it = std.mem.splitScalar(u8, ip_str, '.');
     var i: usize = 0;
     while (it.next()) |part| : (i += 1) {
-        if (i >= 4) return error.InvalidAddr;
-        octets[i] = try std.fmt.parseInt(u8, part, 10);
+        if (i >= 4) return ListenAddrError.InvalidIP;
+        octets[i] = std.fmt.parseInt(u8, part, 10) catch
+            return ListenAddrError.InvalidIP;
     }
-    if (i != 4) return error.InvalidAddr;
+    if (i != 4) return ListenAddrError.InvalidIP;
+
+    const port = std.fmt.parseInt(u16, port_str, 10) catch
+        return ListenAddrError.InvalidPort;
 
     const addr: u32 = @as(u32, octets[0]) |
         (@as(u32, octets[1]) << 8) |
@@ -110,6 +122,13 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("max_occupancy = {d}\n", .{max_occupancy});
 
     const listen_str: []const u8 = res.args.listen orelse default_listen;
-    const addr_in = try parseListenAddr(listen_str);
+    const addr_in = parseListenAddr(listen_str) catch |err| {
+        switch (err) {
+            ListenAddrError.InvalidFormat => std.debug.print("--listen \"{s}\": expected IP:PORT, e.g. 127.0.0.1:9000\n", .{listen_str}),
+            ListenAddrError.InvalidIP => std.debug.print("--listen \"{s}\": not a valid IPv4 address\n", .{listen_str}),
+            ListenAddrError.InvalidPort => std.debug.print("--listen \"{s}\": port must be a number from 0 to 65535\n", .{listen_str}),
+        }
+        return err;
+    };
     try blocking_server.startServer(addr_in, max_occupancy);
 }

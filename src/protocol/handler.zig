@@ -2,7 +2,8 @@ const parser = @import("parser.zig");
 const store = @import("../store/vegosh.zig");
 const client = @import("../server/connection.zig");
 const std = @import("std");
-
+const rawz = @import("rawz");
+const syscall_io = rawz.io;
 pub const OK: u8 = 0x69;
 pub const KEY_NOT_FOUND: u8 = 0x67;
 pub const MAX_LIMIT_REACHED: u8 = 0x68;
@@ -17,6 +18,7 @@ pub fn handleParseResult(
     switch (result) {
         .invalid_magic => {
             std.debug.print("[protocol] invalid magic\n", .{});
+            return error.InvalidMagic;
         },
 
         .invalid_opcode => {

@@ -1,6 +1,6 @@
 const syscall = rawz.socket;
 const types = rawz.types;
-const io = rawz.io;
+const syscall_io = rawz.io;
 const std = @import("std");
 const client = @import("connection.zig");
 const parser = @import("../protocol/parser.zig");
@@ -48,15 +48,22 @@ pub fn startServer(
             };
 
             handler.handleParseResult(&table, result, &conn) catch |err| {
-                std.debug.print(
-                    "handler error: {s}\n",
-                    .{@errorName(err)},
-                );
+                switch (err) {
+                    error.InvalidMagic => {
+                        syscall_io.close(client_fd) catch |errr| {
+                            std.debug.print(
+                                "close error: {s}\n",
+                                .{@errorName(errr)},
+                            );
+                        };
+                    },
+                    else => {},
+                }
                 break;
             };
         }
 
-        io.close(client_fd) catch |err| {
+        syscall_io.close(client_fd) catch |err| {
             std.debug.print(
                 "close error: {s}\n",
                 .{@errorName(err)},
