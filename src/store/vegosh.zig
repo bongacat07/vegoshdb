@@ -3,25 +3,27 @@ const std = @import("std");
 pub const TABLE_SIZE: usize = 1 << 21;
 pub const MASK: u32 = @as(u32, TABLE_SIZE) - 1;
 
-pub const KEY_SIZE: usize = 16;
-pub const VALUE_SIZE: usize = 32;
+pub const MAX_KEY_SIZE: usize = 16;
+pub const MAX_VALUE_SIZE: usize = 32;
 pub const MAX_LOAD_FACTOR: f64 = 0.75;
 const EMPTY: u8 = 0x00;
 const OCCUPIED: u8 = 0x01;
 
 const Slot = struct {
-    key: [KEY_SIZE]u8,
-    value: [VALUE_SIZE]u8,
+    key: [MAX_KEY_SIZE]u8,
+    value: [MAX_VALUE_SIZE]u8,
     hash: u64,
+    key_len: u8,
     value_len: u8,
     status: u8,
     probe_dist: u16,
-    padding: [4]u8 = [_]u8{0} ** 4,
+    padding: [3]u8 = @splat(0),
 
     const empty: Slot = .{
-        .key = [_]u8{0} ** KEY_SIZE,
-        .value = [_]u8{0} ** VALUE_SIZE,
+        .key = @splat(0),
+        .value = @splat(0),
         .hash = 0,
+        .key_len = 0,
         .value_len = 0,
         .status = EMPTY,
         .probe_dist = 0,
@@ -36,7 +38,7 @@ pub const InsertOutcome = enum { inserted, updated };
 pub const InsertError = error{TableFull};
 pub const LookupError = error{NotFound};
 
-inline fn hashKey(key: *const [KEY_SIZE]u8) u64 {
+inline fn hashKey(key: []const u8) u64 {
     return std.hash.Wyhash.hash(123, key);
 }
 pub const Vegosh = struct {
@@ -45,27 +47,30 @@ pub const Vegosh = struct {
     max_keys: u32,
 
     pub fn init(table: *Vegosh, max_keys: u32) void {
+        std.debug.assert(max_keys <= TABLE_SIZE * 3 / 4);
         table.count = 0;
         table.max_keys = max_keys;
         @memset(&table.slots, Slot.empty);
     }
 
-    pub inline fn insert(table: *Vegosh, key: *const [KEY_SIZE]u8, value: *const [VALUE_SIZE]u8, value_len: u8) InsertError!InsertOutcome {
-        std.debug.assert(value_len <= VALUE_SIZE);
+    pub inline fn insert(table: *Vegosh, key: []const u8, value: []const u8) InsertError!InsertOutcome {
+        std.debug.assert(key.len <= MAX_KEY_SIZE);
+        std.debug.assert(value.len <= MAX_VALUE_SIZE);
 
-        if (table.count >= table.max_keys) return error.TableFull;
+        if (table.count >= table.max_keys) {
+            _ = table.get(key) catch return error.TableFull;
+        }
 
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
 
-        var incoming = Slot{
-            .key = key.*,
-            .value = value.*,
-            .hash = hash,
-            .value_len = value_len,
-            .status = OCCUPIED,
-            .probe_dist = 0,
-        };
+        var incoming = Slot.empty;
+        @memcpy(incoming.key[0..key.len], key);
+        @memcpy(incoming.value[0..value.len], value);
+        incoming.hash = hash;
+        incoming.key_len = @intCast(key.len);
+        incoming.value_len = @intCast(value.len);
+        incoming.status = OCCUPIED;
 
         while (true) {
             const slot = &table.slots[index];
@@ -76,7 +81,9 @@ pub const Vegosh = struct {
                 return .inserted;
             }
 
-            if (slot.hash == incoming.hash and std.mem.eql(u8, &slot.key, &incoming.key)) {
+            if (slot.hash == incoming.hash and slot.key_len == incoming.key_len and
+                std.mem.eql(u8, slot.key[0..slot.key_len], incoming.key[0..incoming.key_len]))
+            {
                 slot.value = incoming.value;
                 slot.value_len = incoming.value_len;
                 return .updated;
@@ -91,7 +98,7 @@ pub const Vegosh = struct {
         }
     }
 
-    pub inline fn get(table: *Vegosh, key: *const [KEY_SIZE]u8) LookupError!struct { value: [VALUE_SIZE]u8, len: u8 } {
+    pub inline fn get(table: *Vegosh, key: []const u8) LookupError!struct { value: [MAX_VALUE_SIZE]u8, len: u8 } {
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
         var probe_dist: u16 = 0;
@@ -101,7 +108,9 @@ pub const Vegosh = struct {
 
             if (slot.status == EMPTY) return error.NotFound;
 
-            if (slot.hash == hash and std.mem.eql(u8, &slot.key, key)) {
+            if (slot.hash == hash and slot.key_len == key.len and
+                std.mem.eql(u8, slot.key[0..slot.key_len], key))
+            {
                 return .{ .value = slot.value, .len = slot.value_len };
             }
 
@@ -112,7 +121,7 @@ pub const Vegosh = struct {
         }
     }
 
-    pub inline fn delete(table: *Vegosh, key: *const [KEY_SIZE]u8) LookupError!void {
+    pub inline fn delete(table: *Vegosh, key: []const u8) LookupError!void {
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
         var probe_dist: u16 = 0;
@@ -121,7 +130,8 @@ pub const Vegosh = struct {
             const slot = &table.slots[index];
 
             if (slot.status == EMPTY) return error.NotFound;
-            if (slot.hash == hash and std.mem.eql(u8, &slot.key, key)) break;
+            if (slot.hash == hash and slot.key_len == key.len and
+                std.mem.eql(u8, slot.key[0..slot.key_len], key)) break;
             if (probe_dist > slot.probe_dist) return error.NotFound;
 
             index = (index + 1) & MASK;

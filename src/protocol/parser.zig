@@ -16,12 +16,8 @@ pub const SIZE: u8 = 0x04;
 pub const PING: u8 = 0x05;
 pub const FLUSH: u8 = 0x06;
 
-// Response codes
-pub const OK: u8 = 0x69;
-pub const KEY_NOT_FOUND: u8 = 0x67;
-pub const MAX_LIMIT_REACHED: u8 = 0x68;
-pub const OK_KEY_UPDATED: u8 = 0x65;
-pub const INVALID_OPCODE: u8 = 0x64;
+//Protocol format:
+// [MAGIC 4 byte] [1 byte opcode] [16 byte key] [1 byte value len] [32 byte value len]
 
 pub const Command = union(enum) {
     set: struct {
