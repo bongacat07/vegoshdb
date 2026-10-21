@@ -1,11 +1,10 @@
 const client = @import("../server/connection.zig");
 const std = @import("std");
-
-pub const MAX_KEY_LEN: usize = 16;
-pub const MAX_VALUE_LEN: usize = 32;
+const store = @import("../store/vegosh.zig");
+pub const MAX_KEY_LEN: usize = store.MAX_KEY_SIZE;
+pub const MAX_VALUE_LEN: usize = store.MAX_VALUE_SIZE;
 
 pub const MAX_CONNECTIONS: usize = 10_000;
-pub const MAX_ENTRIES: usize = 1_000_000;
 
 pub const MAGIC_BYTES: [4]u8 = .{ 'v', 'k', 'd', 'b' };
 
@@ -16,21 +15,21 @@ pub const SIZE: u8 = 0x04;
 pub const PING: u8 = 0x05;
 pub const FLUSH: u8 = 0x06;
 
-//Protocol format:
-// [MAGIC 4 byte] [1 byte opcode] [16 byte key] [1 byte value len] [32 byte value len]
-
 pub const Command = union(enum) {
     set: struct {
         key: [MAX_KEY_LEN]u8,
         value: [MAX_VALUE_LEN]u8,
+        key_len: u8,
         value_len: u8,
     },
 
     get: struct {
+        key_len: u8,
         key: [MAX_KEY_LEN]u8,
     },
 
     delete: struct {
+        key_len: u8,
         key: [MAX_KEY_LEN]u8,
     },
 
@@ -60,43 +59,31 @@ pub fn parse(conn: *client.Connection) !ParseResult {
         },
 
         GET_KEY => {
-            const key = try conn.readKey();
+            const key_len = try conn.readKeyLen();
+            const key = try conn.readKey(key_len);
 
-            return .{
-                .command = .{
-                    .get = .{
-                        .key = key,
-                    },
-                },
-            };
+            return .{ .command = .{ .get = .{ .key_len = key_len, .key = key } } };
         },
 
         SET_KEY => {
-            const key = try conn.readKey();
+            const key_len = try conn.readKeyLen();
+            const key = try conn.readKey(key_len);
             const value_len = try conn.readValueLen();
             const value = try conn.readValue(value_len);
 
-            return .{
-                .command = .{
-                    .set = .{
-                        .key = key,
-                        .value = value,
-                        .value_len = value_len,
-                    },
-                },
-            };
+            return .{ .command = .{ .set = .{
+                .key_len = key_len,
+                .key = key,
+                .value = value,
+                .value_len = value_len,
+            } } };
         },
 
         DELETE_KEY => {
-            const key = try conn.readKey();
+            const key_len = try conn.readKeyLen();
+            const key = try conn.readKey(key_len);
 
-            return .{
-                .command = .{
-                    .delete = .{
-                        .key = key,
-                    },
-                },
-            };
+            return .{ .command = .{ .delete = .{ .key_len = key_len, .key = key } } };
         },
 
         FLUSH => {

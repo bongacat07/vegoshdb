@@ -13,15 +13,17 @@ const Slot = struct {
     key: [MAX_KEY_SIZE]u8,
     value: [MAX_VALUE_SIZE]u8,
     hash: u64,
+    key_len: u8,
     value_len: u8,
     status: u8,
     probe_dist: u16,
-    padding: [4]u8 = @splat(0),
+    padding: [3]u8 = @splat(0),
 
     const empty: Slot = .{
         .key = @splat(0),
         .value = @splat(0),
         .hash = 0,
+        .key_len = 0,
         .value_len = 0,
         .status = EMPTY,
         .probe_dist = 0,
@@ -66,6 +68,7 @@ pub const Vegosh = struct {
         @memcpy(incoming.key[0..key.len], key);
         @memcpy(incoming.value[0..value.len], value);
         incoming.hash = hash;
+        incoming.key_len = @intCast(key.len);
         incoming.value_len = @intCast(value.len);
         incoming.status = OCCUPIED;
 
@@ -78,7 +81,9 @@ pub const Vegosh = struct {
                 return .inserted;
             }
 
-            if (slot.hash == incoming.hash and std.mem.eql(u8, &slot.key, &incoming.key)) {
+            if (slot.hash == incoming.hash and slot.key_len == incoming.key_len and
+                std.mem.eql(u8, &slot.key, &incoming.key))
+            {
                 slot.value = incoming.value;
                 slot.value_len = incoming.value_len;
                 return .updated;
@@ -95,8 +100,6 @@ pub const Vegosh = struct {
 
     pub inline fn get(table: *Vegosh, key: []const u8) LookupError!struct { value: [MAX_VALUE_SIZE]u8, len: u8 } {
         std.debug.assert(key.len <= MAX_KEY_SIZE);
-        var padded: [MAX_KEY_SIZE]u8 = @splat(0);
-        @memcpy(padded[0..key.len], key);
 
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
@@ -107,7 +110,9 @@ pub const Vegosh = struct {
 
             if (slot.status == EMPTY) return error.NotFound;
 
-            if (slot.hash == hash and std.mem.eql(u8, &slot.key, &padded)) {
+            if (slot.hash == hash and slot.key_len == key.len and
+                std.mem.eql(u8, slot.key[0..slot.key_len], key))
+            {
                 return .{ .value = slot.value, .len = slot.value_len };
             }
 
@@ -120,8 +125,6 @@ pub const Vegosh = struct {
 
     pub inline fn delete(table: *Vegosh, key: []const u8) LookupError!void {
         std.debug.assert(key.len <= MAX_KEY_SIZE);
-        var padded: [MAX_KEY_SIZE]u8 = @splat(0);
-        @memcpy(padded[0..key.len], key);
 
         const hash = hashKey(key);
         var index: u32 = @truncate(hash & MASK);
@@ -131,7 +134,8 @@ pub const Vegosh = struct {
             const slot = &table.slots[index];
 
             if (slot.status == EMPTY) return error.NotFound;
-            if (slot.hash == hash and std.mem.eql(u8, &slot.key, &padded)) break;
+            if (slot.hash == hash and slot.key_len == key.len and
+                std.mem.eql(u8, slot.key[0..slot.key_len], key)) break;
             if (probe_dist > slot.probe_dist) return error.NotFound;
 
             index = (index + 1) & MASK;

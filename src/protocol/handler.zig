@@ -29,9 +29,8 @@ pub fn handleParseResult(
             switch (command) {
                 .set => |cmd| {
                     const outcome = table.insert(
-                        &cmd.key,
-                        &cmd.value,
-                        cmd.value_len,
+                        cmd.key[0..cmd.key_len],
+                        cmd.value[0..cmd.value_len],
                     ) catch |err| switch (err) {
                         error.TableFull => {
                             try conn.writeResponse(MAX_LIMIT_REACHED);
@@ -52,7 +51,7 @@ pub fn handleParseResult(
 
                 .get => |cmd| {
                     const result_value = table.get(
-                        &cmd.key,
+                        cmd.key[0..cmd.key_len],
                     ) catch |err| switch (err) {
                         error.NotFound => {
                             try conn.writeResponse(KEY_NOT_FOUND);
@@ -67,7 +66,7 @@ pub fn handleParseResult(
 
                 .delete => |cmd| {
                     table.delete(
-                        &cmd.key,
+                        cmd.key[0..cmd.key_len],
                     ) catch |err| switch (err) {
                         error.NotFound => {
                             try conn.writeResponse(KEY_NOT_FOUND);
