@@ -2,9 +2,9 @@ const rawz = @import("rawz");
 const types = rawz.types;
 const io = rawz.io;
 const std = @import("std");
-
-pub const MAX_KEY_LEN: usize = 16;
-pub const MAX_VALUE_LEN: usize = 32;
+const store = @import("../store/vegosh.zig");
+pub const MAX_KEY_LEN: usize = store.MAX_KEY_SIZE;
+pub const MAX_VALUE_LEN: usize = store.MAX_VALUE_SIZE;
 
 pub const Connection = struct {
     fd: types.Fd,
@@ -31,9 +31,16 @@ pub const Connection = struct {
         return header;
     }
 
-    pub fn readKey(self: *Connection) ![MAX_KEY_LEN]u8 {
-        var key: [MAX_KEY_LEN]u8 = undefined;
-        try self.readExact(&key);
+    pub fn readKeyLen(self: *Connection) !u8 {
+        var key_len: u8 = undefined;
+        try self.readExact(std.mem.asBytes(&key_len));
+        return key_len;
+    }
+
+    pub fn readKey(self: *Connection, key_len: u8) ![MAX_KEY_LEN]u8 {
+        if (key_len > MAX_KEY_LEN) return error.KeyTooLong;
+        var key: [MAX_KEY_LEN]u8 = @splat(0);
+        try self.readExact(key[0..key_len]);
         return key;
     }
 
@@ -44,10 +51,8 @@ pub const Connection = struct {
     }
 
     pub fn readValue(self: *Connection, value_len: u8) ![MAX_VALUE_LEN]u8 {
-        if (value_len > MAX_VALUE_LEN)
-            return error.InvalidValueLength;
-
-        var value: [MAX_VALUE_LEN]u8 = undefined;
+        if (value_len > MAX_VALUE_LEN) return error.ValueTooLong;
+        var value: [MAX_VALUE_LEN]u8 = @splat(0);
         try self.readExact(value[0..value_len]);
         return value;
     }
